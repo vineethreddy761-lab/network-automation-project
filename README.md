@@ -36,6 +36,7 @@ This repository contains a fully automated, production-grade network automation 
 ```
 
 2. **Verify BGP Peering**:
+
   ```bash
   docker exec -it cloud-router vtysh -c "show ip bgp summary"
 ```
