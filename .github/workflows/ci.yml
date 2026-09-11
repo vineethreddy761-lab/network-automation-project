@@ -1,0 +1,28 @@
+name: Network Automation CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Validate
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Verify FRR Configs
+        run: |
+          test -f configs/router_bgp.conf
+          test -f configs/telco_bgp.conf
+          echo "FRR configuration files verified successfully."
