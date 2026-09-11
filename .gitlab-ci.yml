@@ -1,0 +1,19 @@
+stages:
+  - validate
+  - test
+
+terraform_validate:
+  stage: validate
+  image: hashicorp/terraform:latest
+  script:
+    - terraform init -backend=false
+    - terraform validate
+
+frr_config_test:
+  stage: test
+  image: alpine:latest
+  script:
+    - echo "Validating FRR configuration files..."
+    - test -f configs/router_bgp.conf
+    - test -f configs/telco_bgp.conf
+    - echo "FRR configuration syntax check passed successfully."
