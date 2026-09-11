@@ -33,6 +33,16 @@ services:
       net-mgmt:
         ipv4_address: 192.168.56.20
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./configs/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - net-mgmt
+
 networks:
   net-mgmt:
     driver: bridge
