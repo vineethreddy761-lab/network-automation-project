@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  cloud-router:
+    image: ubuntu:22.04
+    container_name: cloud-router
+    command: tail -f /dev/null
+    cap_add:
+      - NET_ADMIN
+
+  telco-router:
+    image: ubuntu:22.04
+    container_name: telco-router
+    command: tail -f /dev/null
+    cap_add:
+      - NET_ADMIN
