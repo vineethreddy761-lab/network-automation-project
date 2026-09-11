@@ -30,18 +30,14 @@ This repository contains a fully automated, production-grade network automation 
 ---
 
 ## Usage & Execution
-1. **Start the Stack**:
+
+1. **Start the Stack, Verify BGP Peering & IPsec Status**:
    ```bash
+   # 1. Start the Stack
    docker compose up -d --build
-```
 
-2. **Verify BGP Peering**:
+   # 2. Verify BGP Peering
+   docker exec -it cloud-router vtysh -c "show ip bgp summary"
 
-  ```bash
-  docker exec -it cloud-router vtysh -c "show ip bgp summary"
-```
-
-3. **Verify IPsec Status**:
-  ```bash
-  docker exec -it cloud-router ipsec statusall
-```
+   # 3. Verify IPsec Status
+   docker exec -it cloud-router ipsec statusall
