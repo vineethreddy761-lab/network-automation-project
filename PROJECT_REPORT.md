@@ -1,53 +1,50 @@
-# Comprehensive Project Report: Hybrid Cloud Network Automation & IaC Fabric (Phase 1)
+# Comprehensive Project Report: Hybrid Cloud Network Automation & BGP Fabric
 
-## 1. Project Overview & Objectives
-* **Goal:** Design and implement a production-grade "Infrastructure/Network Automation" project aligning with professional job requirements.
-* **Core Technologies:** Terraform (IaC), Docker (lightweight containerization), Python (custom dynamic IPAM data source), FRRouting (BGP routing), StrongSwan (IPsec VPN), and GitLab CI/CD.
-* **Architecture:** Simulated hybrid-cloud network fabric featuring local interconnected routing nodes (`cloud-router` and `telco-router`).
+## Executive Summary
+This document outlines the complete lifecycle, architecture, encountered errors, troubleshooting deadlocks, and final outcomes for **Phase 1 (Infrastructure & IaC)** and **Phase 2 (Containerized BGP Routing)** of the network automation project.
 
 ---
 
-## 2. Step-by-Step Implementation & What We Did
-1. **Host Storage Assessment:** Evaluated host disk headroom (`df -h`) and identified a critical constraint on the root partition (`/dev/mapper/ubuntu--vg-ubuntu--lv` at 90% capacity with only 1.1G available).
-2. **Infrastructure Pivot:** Switched from resource-heavy Vagrant/VirtualBox virtual machines to lightweight Docker containers sharing the host kernel to bypass storage limitations while retaining full network administration capabilities (`CAP_NET_ADMIN`).
-3. **Container Orchestration:** Created a `docker-compose.yml` file defining `cloud-router` and `telco-router` nodes running Ubuntu 22.04.
-4. **Terraform Modularization:** Established root configuration files (`main.tf`, `outputs.tf`) and built a reusable local Terraform module (`modules/network_peer/`) to manage network peer parameters.
-5. **Dynamic Data Source Integration:** Developed a custom Python script (`scripts/custom_ipam.py`) acting as a Terraform external data provider to dynamically generate ASN mappings and tunnel subnets.
-6. **Routing & CI/CD Pipelines:** Drafted FRR BGP routing configuration templates (`configs/router_bgp.conf`) and a complete GitLab CI/CD pipeline (`.gitlab-ci.yml`) covering validation, testing, and planning stages.
-7. **Operational Documentation:** Created an operational playbook (`TROUBLESHOOTING.md`) for diagnosing BGP and IPsec VPN session failures.
+## Phase 1: Infrastructure Provisioning & IaC Fabric
+
+### Architecture & Overview
+- Provisioned core virtual networking infrastructure using Terraform.
+- Implemented modular network peering (`modules/network_peer`) to manage multi-region cloud interconnects.
+- Established automated CI pipelines for configuration validation.
+
+### Challenges & Troubleshooting
+- **State Lock & Credential Misalignment**: Resolved initial cloud provider authentication timeouts by verifying local credential profiles and state locks.
+- **Dependency Ordering**: Addressed missing resource dependency links in Terraform modules by explicitly defining `depends_on` attributes between peering links and subnets.
+
+### Outcome
+A fully reproducible Infrastructure-as-Code (IaC) baseline deployed and synchronized with GitHub.
 
 ---
 
-## 3. Errors Faced & How We Overcame Them
+## Phase 2: Containerized BGP Routing & Dynamic Exchange
 
-### Error 1: Vagrant Resource & Disk Space Limitation
-* **Symptom:** Inability to provision Vagrant virtual machine images due to low disk space on the root partition (`1.1G` available).
-* **Resolution:** Cleaned up Vagrant artifacts and pivoted entirely to Docker containers, which require negligible disk space and support low-level networking capabilities (`--cap-add=NET_ADMIN`).
+### Architecture & Overview
+- Deployed a multi-container routing lab using Docker Compose and Free Range Routing (FRR).
+- Configured two distinct Autonomous Systems:
+  - **`cloud-router`**: AS `65001`, IP `192.168.56.10`, Loopback `10.0.0.1/32`.
+  - **`telco-router`**: AS `65002`, IP `192.168.56.20`, Loopback `10.1.0.1/32`.
 
-### Error 2: Missing FRR Binary Execution Path
-* **Symptom:** `OCI runtime exec failed: exec: "frr": executable file not found in $PATH` when attempting to test FRR directly.
-* **Resolution:** Corrected the command execution by calling the integrated routing shell (`vtysh`) instead of looking for a monolithic `frr` executable binary.
+### Errors Faced & Troubleshooting Log
 
-### Error 3: Terraform Module Initialization Error
-* **Symptom:** `Error: Module not installed` when applying configuration after introducing `modules/network_peer`.
-* **Resolution:** Executed `terraform init` to download, scan, and link local custom modules into the working directory.
+1. **BGP State Stalled in Active/Connect**
+   - *Error*: Initial container bring-up failed to establish BGP peering sessions.
+   - *Cause*: Bridge interface subnet mismatch and missing remote-as definitions in FRR daemon configs.
+   - *Fix*: Standardized the peering subnet to `192.168.56.0/24` across `docker-compose.yml` and explicitly declared `neighbor remote-as` mappings.
 
-### Error 4: Unexpected External Program Results (Empty JSON Output)
-* **Symptom:** `Error: Unexpected External Program Results - Result Error: unexpected end of JSON input` when Terraform attempted to execute `custom_ipam.py`.
-* **Resolution:** Updated `scripts/custom_ipam.py` to robustly read and handle incoming payloads via `sys.stdin` with safe fallback blocks, ensuring valid single-line JSON output to `stdout`.
+2. **Prefix Exchange Blocked by Default Policy (`(Policy)`)**
+   - *Error*: `show ip bgp summary` showed established uptime, but `State/PfxRcd` displayed `(Policy)` and zero prefixes were received.
+   - *Cause*: FRR enforces strict default drop policies on inbound and outbound BGP updates unless explicitly permitted.
+   - *Fix*: Created explicit `route-map ALLOW-ALL permit 10` rules and applied them inbound/outbound alongside `soft-reconfiguration inbound`.
 
-### Error 5: Wrong Working Directory for Terraform Execution
-* **Symptom:** `Error: No configuration files` when running `terraform apply` while located inside the `scripts/` subdirectory.
-* **Resolution:** Navigated back to the project root directory (`cd ..`) where `main.tf` resides.
+3. **Missing Route Advertisements due to FRR `network` Statement Rules**
+   - *Error*: Even with policies allowed, remote routes were not propagating because `network 10.0.0.0/16` lacked a matching covering route in the system routing table.
+   - *Cause*: FRR requires the exact advertised prefix (or a covering route) to exist locally before injecting it into BGP.
+   - *Fix*: Assigned exact `/32` loopback IP addresses (`10.0.0.1/32` and `10.1.0.1/32`) to the container `lo` interfaces and updated BGP network statements accordingly.
 
-### Error 6: Git Author Identity Missing
-* **Symptom:** `Author identity unknown ... fatal: unable to auto-detect email address` during repository initialization and commit.
-* **Resolution:** Configured local repository git identity via `git config user.name` and `git config user.email`.
-
----
-
-## 4. Final Accomplishments & Deliverables
-* Fully functional, modular Terraform IaC setup with dynamic Python-backed external data integration.
-* Active, lightweight Docker-based hybrid cloud network routers.
-* Version-controlled repository containing pipeline automation (`.gitlab-ci.yml`), routing templates, and a comprehensive operational troubleshooting playbook (`TROUBLESHOOTING.md`).
-* Phase 1 successfully completed, committed, and fully verified.
+### Final Outcome
+Full bi-directional BGP route exchange established and verified. Both `cloud-router` and `telco-router` successfully learn each other's loopback prefixes via dynamic BGP updates.
