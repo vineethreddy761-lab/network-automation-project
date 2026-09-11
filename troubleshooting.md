@@ -1,24 +1,58 @@
-# Infrastructure & Network Automation Troubleshooting Playbook
+# Troubleshooting Guide: Network Automation Lab
 
-This playbook outlines diagnostic procedures and resolution steps across all three phases of the network automation lab.
+This guide documents common issues, diagnostic steps, and resolutions encountered across Phases 1 through 4 of the network automation laboratory.
 
-## Phase 1: Container Infrastructure & Volume Mounting
-* **Symptom:** StrongSwan fails to load configuration or complains that `ipsec.conf` is missing.
-* **Diagnostic Steps:**
-  1. Check file placement inside the container: `docker exec -it cloud-router ls -la /etc/`
-  2. Verify volume mounts in `docker-compose.yml` (`./configs/vpn/ipsec.conf:/etc/ipsec.conf`).
-* **Resolution:** Mount configuration files directly into `/etc/ipsec.conf` instead of mounting the directory onto `/etc/ipsec.d`.
+---
 
-## Phase 2: IPsec VPN Tunnel (strongSwan)
-* **Symptom:** Tunnel stuck in `CONNECTING` state with retransmissions (`peer not responding`).
-* **Diagnostic Steps:**
-  1. Check strongSwan status on both routers: `docker exec -it cloud-router ipsec statusall`
-  2. Verify pre-shared keys in `/etc/ipsec.secrets` match on both peers.
-* **Resolution:** Restart the strongSwan daemon (`ipsec restart`) and manually trigger the connection (`ipsec up net-to-net`).
+## Phase 1: Base Container Infrastructure & Disk Space
+* **Symptom**: `docker compose up` fails or image pulls fail with disk capacity errors (`No space left on device`).
+* **Root Cause**: The host root filesystem is near capacity, restricting Docker image layer extractions.
+* **Resolution**:
+  1. Check available disk space: `df -h`
+  2. Prune unused Docker cache and stopped containers:
+     ```bash
+     docker system prune -a --volumes -f
+     ```
+  3. Omit heavy optional services (e.g., Grafana) if host resources are restricted.
 
-## Phase 3: BGP Routing & Prefix Exchange
-* **Symptom:** BGP neighbor stuck in `Idle` or `Connect`, or loopback routes not propagating.
-* **Diagnostic Steps:**
-  1. Check BGP summary via FRR shell: `docker exec -it cloud-router vtysh -c "show ip bgp summary"`
-  2. Verify loopback address assignments: `docker exec -it cloud-router ip addr show dev lo`
-* **Resolution:** Ensure loopback addresses (`10.0.0.1/32` and `10.1.0.1/32`) are properly assigned inside each router container and BGP networks are correctly advertised.
+---
+
+## Phase 2: IPsec VPN Tunnel (`strongSwan`)
+* **Symptom**: Child Security Associations fail to establish (`ESTABLISHED` state missing).
+* **Root Cause**: Mismatched Pre-Shared Keys (PSK), incorrect traffic selectors, or firewall/routing blocks.
+* **Resolution**:
+  1. Inspect strongSwan logs and tunnel status inside the router container:
+     ```bash
+     docker exec -it cloud-router ipsec statusall
+     ```
+  2. Verify that `ipsec.secrets` and `ipsec.conf` match identically on both `cloud-router` and `telco-router`.
+  3. Ensure container capabilities (`NET_ADMIN`, `SYS_ADMIN`) are properly declared in `docker-compose.yml`.
+
+---
+
+## Phase 3: BGP Dynamic Routing (`FRR`)
+* **Symptom**: BGP peering stuck in `Idle` or `Active` state.
+* **Root Cause**: Incorrect Autonomous System (AS) numbers, peer IP address mismatches, or BGP password authentication errors.
+* **Resolution**:
+  1. Check BGP summary table inside FRR vtysh:
+     ```bash
+     docker exec -it cloud-router vtysh -c "show ip bgp summary"
+     ```
+  2. Verify network reachability between router management and peering interfaces via `ping`.
+  3. Restart FRR service inside the container if configuration changes fail to take effect:
+     ```bash
+     docker exec -it cloud-router systemctl restart frr
+     ```
+
+---
+
+## Phase 4: Monitoring & Observability (`Prometheus`)
+* **Symptom**: Prometheus targets show as `down` or `unknown`.
+* **Root Cause**: Misconfigured `prometheus.yml` scrape endpoints or unreachable bridge network ports.
+* **Resolution**:
+  1. Access the Prometheus web interface at `http://localhost:9090/targets` to inspect target health.
+  2. Verify connectivity from the Prometheus container to target endpoints:
+     ```bash
+     docker exec -it prometheus nc -zv <target-ip> <port>
+     ```
+  3. Ensure scrape jobs are properly defined within the `net-mgmt` isolated bridge network (`192.168.56.0/24`).
