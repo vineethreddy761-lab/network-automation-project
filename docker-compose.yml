@@ -1,30 +1,32 @@
+version: '3.8'
+
 services:
   cloud-router:
-    image: ubuntu:22.04
+    image: frrouting/frr:latest
     container_name: cloud-router
-    command: tail -f /dev/null
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
-      - SYS_ADMIN
+    volumes:
+      - ./configs/router_bgp.conf:/etc/frr/frr.conf
+      - ./configs/vpn:/etc/ipsec.d
     networks:
-      net-fabric:
+      net-mgmt:
         ipv4_address: 192.168.56.10
 
   telco-router:
-    image: ubuntu:22.04
+    image: frrouting/frr:latest
     container_name: telco-router
-    command: tail -f /dev/null
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
-      - SYS_ADMIN
+    volumes:
+      - ./configs/telco_bgp.conf:/etc/frr/frr.conf
+      - ./configs/vpn:/etc/ipsec.d
     networks:
-      net-fabric:
+      net-mgmt:
         ipv4_address: 192.168.56.20
 
 networks:
-  net-fabric:
+  net-mgmt:
     driver: bridge
     ipam:
       config:
