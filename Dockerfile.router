@@ -1,0 +1,16 @@
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    frr \
+    frr-pythontools \
+    iproute2 \
+    iputils-ping \
+    strongswan \
+    iptables \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN touch /etc/frr/vtysh.conf
+RUN sed -i 's/bgpd=no/bgpd=yes/' /etc/frr/daemons
+RUN sed -i 's/zebra=no/zebra=yes/' /etc/frr/daemons
+
+CMD ["sh", "-c", "/usr/lib/frr/frrinit.sh start && tail -f /dev/null"]
