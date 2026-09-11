@@ -1,0 +1,43 @@
+name: End-to-End Network Automation Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Phase 1 & 2 - Build and Start Containers & VPN
+        run: |
+          docker compose up -d --build
+          sleep 5
+          docker ps
+
+      - name: Phase 3 - Configure Loopbacks and Verify IPsec & BGP
+        run: |
+          # Assign loopback IPs
+          docker exec cloud-router ip addr add 10.0.0.1/32 dev lo || true
+          docker exec telco-router ip addr add 10.1.0.1/32 dev lo || true
+
+          # Start and bring up IPsec tunnel
+          docker exec cloud-router ipsec restart || true
+          docker exec telco-router ipsec restart || true
+          docker exec cloud-router ipsec up net-to-net || true
+
+          # Verify IPsec status
+          docker exec cloud-router ipsec status
+
+          # Test end-to-end connectivity across encrypted tunnel
+          docker exec cloud-router ping -c 3 10.1.0.1
+
+          # Verify BGP summary
+          docker exec cloud-router vtysh -c "show ip bgp summary"
